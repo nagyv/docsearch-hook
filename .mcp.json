@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "leann-docs-search": {
+      "type": "stdio",
+      "command": "/Users/nagyv/.local/bin/leann_mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}
