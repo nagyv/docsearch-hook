@@ -10,6 +10,7 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 
@@ -20,6 +21,31 @@ def get_config_path() -> Path:
     return Path.home() / ".claude" / "hooks" / "docsearch-config.json"
 
 
+def get_state_dir() -> Path:
+    """Get the state directory path."""
+    if env_path := os.environ.get("DOCSEARCH_STATE_DIR"):
+        return Path(env_path)
+    return Path.home() / ".claude" / "hooks"
+
+
+def sanitize_session_id(session_id: str) -> str:
+    """Sanitize session ID to prevent path traversal attacks.
+
+    Only allows alphanumeric characters, dashes, and underscores.
+    Any other characters are removed.
+    """
+    # Remove any character that isn't alphanumeric, dash, or underscore
+    sanitized = re.sub(r"[^a-zA-Z0-9\-_]", "", session_id)
+    # Ensure we have at least some content
+    return sanitized if sanitized else "default"
+
+
+def get_state_file(session_id: str) -> Path:
+    """Get the state file path for a session."""
+    safe_id = sanitize_session_id(session_id)
+    return get_state_dir() / f"docsearch-state-{safe_id}.json"
+
+
 def load_config() -> dict | None:
     """Load and parse the configuration file. Returns None on any error."""
     config_path = get_config_path()
@@ -28,6 +54,49 @@ def load_config() -> dict | None:
             return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return None
+
+
+def load_state(session_id: str) -> dict:
+    """Load session state. Returns empty dict on any error."""
+    state_file = get_state_file(session_id)
+    try:
+        with open(state_file) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_state(session_id: str, state: dict) -> None:
+    """Save session state."""
+    state_file = get_state_file(session_id)
+    try:
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(state_file, "w") as f:
+            json.dump(state, f)
+    except OSError:
+        pass  # Fail silently - state is optional
+
+
+def params_match(current: dict, previous: dict) -> bool:
+    """Check if current tool_input matches previous denied params.
+
+    Compares query exactly and domains as sets (order-independent).
+    """
+    if current.get("query") != previous.get("query"):
+        return False
+
+    # Compare domains as sets (order-independent)
+    current_allowed = set(current.get("allowed_domains", []) or [])
+    previous_allowed = set(previous.get("allowed_domains", []) or [])
+    if current_allowed != previous_allowed:
+        return False
+
+    current_blocked = set(current.get("blocked_domains", []) or [])
+    previous_blocked = set(previous.get("blocked_domains", []) or [])
+    if current_blocked != previous_blocked:
+        return False
+
+    return True
 
 
 def find_matching_databases(query: str, config: dict) -> list[dict]:
@@ -104,10 +173,31 @@ def main() -> int:
     if not query:
         return 0
 
+    # Get session ID for state management
+    session_id = hook_input.get("session_id", "default")
+
+    # Check escape hatch - if this is a retry of the same params, allow through
+    state = load_state(session_id)
+    last_denied = state.get("last_denied")
+    if last_denied and params_match(tool_input, last_denied):
+        # Clear state and allow through
+        save_state(session_id, {"last_denied": None})
+        return 0
+
     # Find matching databases
     matches = find_matching_databases(query, config)
     if not matches:
         return 0
+
+    # Store current params in state for escape hatch
+    save_state(session_id, {
+        "last_denied": {
+            "query": tool_input.get("query", ""),
+            "allowed_domains": tool_input.get("allowed_domains", []),
+            "blocked_domains": tool_input.get("blocked_domains", []),
+            "timestamp": int(time.time()),
+        }
+    })
 
     # Deny and provide guidance
     response = build_deny_response(matches)

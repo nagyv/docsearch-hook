@@ -16,9 +16,9 @@
 
 | Task | Status | Description | Priority | Order |
 |------|--------|-------------|----------|-------|
-| Task 2 | NOT STARTED | Core Hook Script - Skeleton and Input Parsing | P0 - Foundation | 1 |
-| Task 3 | NOT STARTED | Configuration Loading | P0 - Core | 2 |
-| Task 4 | NOT STARTED | Keyword Matching with Word Boundaries | P0 - Core | 3 |
+| Task 2 | COMPLETED | Core Hook Script - Skeleton and Input Parsing | P0 - Foundation | 1 |
+| Task 3 | COMPLETED | Configuration Loading | P0 - Core | 2 |
+| Task 4 | COMPLETED | Keyword Matching with Word Boundaries | P0 - Core | 3 |
 | Task 6a | NOT STARTED | Session ID Sanitization (Security) | P0 - Security | 4 |
 | Task 6 | NOT STARTED | Session State Management for Escape Hatch | P0 - Core | 5 |
 | Task 12 | NOT STARTED | Make Script Executable and Add Shebang | P0 - Core | 6 |
@@ -34,6 +34,13 @@
 | Task 1 | NOT STARTED | Project Structure and Example Config | P2 - Documentation | 16 |
 | Task 10 | NOT STARTED | README Documentation | P2 - Documentation | 17 |
 | Task 11 | NOT STARTED | Final Integration Testing | P2 - Validation | 18 |
+
+### Implementation Progress (2026-02-05)
+Tasks 2, 3, and 4 completed with 8 passing tests. Core hook functionality now works:
+- Input parsing with fail-open on invalid JSON
+- Configuration loading with DOCSEARCH_CONFIG_PATH env var override
+- Keyword matching with word boundaries (case-insensitive)
+- Denial response generation for single and multiple matches
 
 ## Codebase Analysis (2026-02-05)
 
