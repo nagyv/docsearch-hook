@@ -728,3 +728,293 @@ class TestErrorLogging:
         )
         assert exit_code == 0  # Fail open
         assert "error" in stderr.lower() or "json" in stderr.lower()
+
+
+class TestEdgeCases:
+    """Tests for edge cases and boundary conditions."""
+
+    def test_empty_query_allows_through(self):
+        """Empty query should be allowed through."""
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": ""},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json")},
+        )
+        assert exit_code == 0
+
+    def test_missing_query_allows_through(self):
+        """Missing query field should be allowed through."""
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json")},
+        )
+        assert exit_code == 0
+
+    def test_missing_tool_input_allows_through(self):
+        """Missing tool_input field should be allowed through."""
+        hook_input = {
+            "tool_name": "WebSearch",
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json")},
+        )
+        assert exit_code == 0
+
+    def test_missing_session_id_uses_default(self, tmp_path):
+        """Missing session_id should use 'default' session."""
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "gitlab setup"},
+            # Note: no session_id
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={
+                **os.environ,
+                "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json"),
+                "DOCSEARCH_STATE_DIR": str(state_dir),
+            },
+        )
+        assert exit_code == 2
+
+        # Should use default session
+        state_file = state_dir / "docsearch-state-default.json"
+        assert state_file.exists()
+
+    def test_empty_databases_config_allows_through(self, tmp_path):
+        """Config with empty databases array should allow through."""
+        config_file = tmp_path / "empty_config.json"
+        config_file.write_text('{"databases": []}')
+
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "gitlab ci configuration"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(config_file)},
+        )
+        assert exit_code == 0
+
+    def test_domains_compared_as_sets(self, tmp_path):
+        """Domain arrays should be compared as sets (order-independent)."""
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+
+        # Pre-create state with domains in one order
+        state_file = state_dir / "docsearch-state-test-domains.json"
+        state_file.write_text(json.dumps({
+            "last_denied": {
+                "query": "gitlab ci",
+                "allowed_domains": ["b.com", "a.com"],  # Different order
+                "blocked_domains": [],
+                "timestamp": int(time.time()),
+            }
+        }))
+
+        # Query with same domains in different order
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {
+                "query": "gitlab ci",
+                "allowed_domains": ["a.com", "b.com"],  # Same domains, different order
+                "blocked_domains": [],
+            },
+            "session_id": "test-domains",
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={
+                **os.environ,
+                "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json"),
+                "DOCSEARCH_STATE_DIR": str(state_dir),
+            },
+        )
+        assert exit_code == 0  # Should match and allow through
+
+    def test_special_characters_in_keywords(self, tmp_path):
+        """Keywords with regex special characters should match correctly."""
+        config_file = tmp_path / "special_config.json"
+        config_file.write_text(json.dumps({
+            "databases": [
+                {
+                    "keywords": ["c++", "c#", ".net"],
+                    "path": "/mock/path/dotnet",
+                    "mcp_tool_name": "leann-docs",
+                    "description": ".NET documentation"
+                }
+            ]
+        }))
+
+        # Test C++ keyword
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "c++ templates tutorial"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(config_file)},
+        )
+        assert exit_code == 2
+
+    def test_output_contains_all_required_fields(self):
+        """Output JSON should contain all required hookSpecificOutput fields."""
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "gitlab ci"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json")},
+        )
+        assert exit_code == 2
+
+        output = json.loads(stdout)
+        hook_output = output["hookSpecificOutput"]
+
+        # Verify all required fields present
+        assert "hookEventName" in hook_output
+        assert "permissionDecision" in hook_output
+        assert "permissionDecisionReason" in hook_output
+        assert "additionalContext" in hook_output
+
+        # Verify field values
+        assert hook_output["hookEventName"] == "PreToolUse"
+        assert hook_output["permissionDecision"] == "deny"
+
+
+class TestSessionIsolation:
+    """Tests for session isolation (Task 9b)."""
+
+    def test_state_from_session_a_does_not_affect_session_b(self, tmp_path):
+        """State from session A should not affect session B."""
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+
+        # Create state for session A
+        state_file_a = state_dir / "docsearch-state-session-a.json"
+        state_file_a.write_text(json.dumps({
+            "last_denied": {
+                "query": "gitlab ci",
+                "allowed_domains": [],
+                "blocked_domains": [],
+                "timestamp": int(time.time()),
+            }
+        }))
+
+        # Query from session B with same query should be denied (no escape hatch)
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {
+                "query": "gitlab ci",
+                "allowed_domains": [],
+                "blocked_domains": [],
+            },
+            "session_id": "session-b",  # Different session
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={
+                **os.environ,
+                "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json"),
+                "DOCSEARCH_STATE_DIR": str(state_dir),
+            },
+        )
+        # Session B has no state, so it should be denied
+        assert exit_code == 2
+
+    def test_escape_hatch_only_works_for_same_session(self, tmp_path):
+        """Escape hatch should only work for the session that was denied."""
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+
+        # Create state for session A with a denial
+        state_file_a = state_dir / "docsearch-state-session-a.json"
+        state_file_a.write_text(json.dumps({
+            "last_denied": {
+                "query": "gitlab ci",
+                "allowed_domains": [],
+                "blocked_domains": [],
+                "timestamp": int(time.time()),
+            }
+        }))
+
+        # Retry from session A should succeed (escape hatch)
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {
+                "query": "gitlab ci",
+                "allowed_domains": [],
+                "blocked_domains": [],
+            },
+            "session_id": "session-a",  # Same session as state
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={
+                **os.environ,
+                "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json"),
+                "DOCSEARCH_STATE_DIR": str(state_dir),
+            },
+        )
+        assert exit_code == 0  # Escape hatch triggered
+
+
+class TestPermissionErrors:
+    """Tests for permission error handling (fail-open behavior)."""
+
+    def test_unreadable_config_allows_through(self, tmp_path):
+        """Unreadable config file should fail open (exit 0)."""
+        config_file = tmp_path / "unreadable_config.json"
+        config_file.write_text('{"databases": [{"keywords": ["test"], "path": "/test", "mcp_tool_name": "test", "description": "test"}]}')
+        config_file.chmod(0o000)  # No permissions
+
+        try:
+            hook_input = {
+                "tool_name": "WebSearch",
+                "tool_input": {"query": "test query"},
+            }
+            exit_code, stdout, stderr = run_hook(
+                hook_input,
+                env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(config_file)},
+            )
+            # Should fail open
+            assert exit_code == 0
+        finally:
+            config_file.chmod(0o644)  # Restore for cleanup
+
+    def test_unwritable_state_dir_still_denies(self, tmp_path):
+        """Unwritable state directory should still deny (state is optional)."""
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+        state_dir.chmod(0o555)  # Read-only
+
+        try:
+            hook_input = {
+                "tool_name": "WebSearch",
+                "tool_input": {"query": "gitlab ci setup"},
+                "session_id": "test-session",
+            }
+            exit_code, stdout, stderr = run_hook(
+                hook_input,
+                env={
+                    **os.environ,
+                    "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json"),
+                    "DOCSEARCH_STATE_DIR": str(state_dir),
+                },
+            )
+            # Should still deny (state write failure is silent)
+            assert exit_code == 2
+        finally:
+            state_dir.chmod(0o755)  # Restore for cleanup

@@ -189,6 +189,32 @@ def params_match(current: dict, previous: dict) -> bool:
     return True
 
 
+def build_keyword_pattern(keyword: str) -> str:
+    """Build a regex pattern for keyword matching.
+
+    Uses word boundaries when possible, but handles keywords that start/end
+    with non-word characters (like c++, .net, c#) by using lookahead/lookbehind
+    for whitespace or string boundaries instead.
+    """
+    escaped = re.escape(keyword.lower())
+
+    # Check if keyword starts with a word character
+    if re.match(r"^\w", keyword):
+        prefix = r"\b"
+    else:
+        # Use lookbehind for start of string or whitespace
+        prefix = r"(?:^|(?<=\s))"
+
+    # Check if keyword ends with a word character
+    if re.match(r".*\w$", keyword):
+        suffix = r"\b"
+    else:
+        # Use lookahead for end of string or whitespace
+        suffix = r"(?=\s|$)"
+
+    return prefix + escaped + suffix
+
+
 def find_matching_databases(query: str, config: dict) -> list[dict]:
     """Find all databases with keywords matching the query.
 
@@ -200,8 +226,7 @@ def find_matching_databases(query: str, config: dict) -> list[dict]:
 
     for db in config.get("databases", []):
         for keyword in db.get("keywords", []):
-            # Word boundary regex for exact word match
-            pattern = rf"\b{re.escape(keyword.lower())}\b"
+            pattern = build_keyword_pattern(keyword)
             if re.search(pattern, query_lower):
                 matches.append(db)
                 break  # Only add each database once

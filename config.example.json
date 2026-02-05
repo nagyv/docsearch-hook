@@ -1,0 +1,16 @@
+{
+  "databases": [
+    {
+      "keywords": ["gitlab", "gl", "gitlab-ci"],
+      "path": "/Users/viktor/.leann/databases/gitlab",
+      "mcp_tool_name": "leann-docs",
+      "description": "GitLab documentation from docs.gitlab.com"
+    },
+    {
+      "keywords": ["kubernetes", "k8s", "kubectl"],
+      "path": "/Users/viktor/.leann/databases/kubernetes",
+      "mcp_tool_name": "leann-docs",
+      "description": "Kubernetes official documentation"
+    }
+  ]
+}
