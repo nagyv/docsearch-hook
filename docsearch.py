@@ -77,6 +77,38 @@ def save_state(session_id: str, state: dict) -> None:
         pass  # Fail silently - state is optional
 
 
+# State expiry timeout in seconds (5 minutes)
+STATE_EXPIRY_SECONDS = 300
+
+
+def is_state_expired(last_denied: dict) -> bool:
+    """Check if the state entry has expired (older than 5 minutes)."""
+    timestamp = last_denied.get("timestamp", 0)
+    return (int(time.time()) - timestamp) > STATE_EXPIRY_SECONDS
+
+
+def cleanup_stale_state_files() -> None:
+    """Clean up stale state files from other sessions.
+
+    Removes state files with expired timestamps (older than STATE_EXPIRY_SECONDS).
+    This is a complementary mechanism to timestamp-based expiry.
+    """
+    state_dir = get_state_dir()
+    try:
+        for state_file in state_dir.glob("docsearch-state-*.json"):
+            try:
+                with open(state_file) as f:
+                    state = json.load(f)
+                last_denied = state.get("last_denied")
+                if last_denied and is_state_expired(last_denied):
+                    state_file.unlink()
+            except (json.JSONDecodeError, OSError, KeyError):
+                # If we can't read or parse the file, leave it alone
+                pass
+    except OSError:
+        pass  # State directory doesn't exist or isn't accessible
+
+
 def params_match(current: dict, previous: dict) -> bool:
     """Check if current tool_input matches previous denied params.
 
@@ -167,6 +199,9 @@ def main() -> int:
     if config is None:
         return 0
 
+    # Clean up stale state files from other sessions
+    cleanup_stale_state_files()
+
     # Get the query from tool input
     tool_input = hook_input.get("tool_input", {})
     query = tool_input.get("query", "")
@@ -179,7 +214,7 @@ def main() -> int:
     # Check escape hatch - if this is a retry of the same params, allow through
     state = load_state(session_id)
     last_denied = state.get("last_denied")
-    if last_denied and params_match(tool_input, last_denied):
+    if last_denied and not is_state_expired(last_denied) and params_match(tool_input, last_denied):
         # Clear state and allow through
         save_state(session_id, {"last_denied": None})
         return 0

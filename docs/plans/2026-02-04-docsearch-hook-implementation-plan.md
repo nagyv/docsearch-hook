@@ -19,9 +19,9 @@
 | Task 2 | COMPLETED | Core Hook Script - Skeleton and Input Parsing | P0 - Foundation | 1 |
 | Task 3 | COMPLETED | Configuration Loading | P0 - Core | 2 |
 | Task 4 | COMPLETED | Keyword Matching with Word Boundaries | P0 - Core | 3 |
-| Task 6a | NOT STARTED | Session ID Sanitization (Security) | P0 - Security | 4 |
-| Task 6 | NOT STARTED | Session State Management for Escape Hatch | P0 - Core | 5 |
-| Task 12 | NOT STARTED | Make Script Executable and Add Shebang | P0 - Core | 6 |
+| Task 6a | COMPLETED | Session ID Sanitization (Security) | P0 - Security | 4 |
+| Task 6 | COMPLETED | Session State Management for Escape Hatch | P0 - Core | 5 |
+| Task 12 | COMPLETED | Make Script Executable and Add Shebang | P0 - Core | 6 |
 | Task 5 | NOT STARTED | Multiple Keyword Matching (Verification Tests) | P1 - Feature | 7 |
 | Task 7 | NOT STARTED | State Cleanup (Stale State Expiry) | P1 - Enhancement | 8 |
 | Task 7a | NOT STARTED | Session Start State Cleanup | P1 - Enhancement | 9 |
@@ -41,6 +41,12 @@ Tasks 2, 3, and 4 completed with 8 passing tests. Core hook functionality now wo
 - Configuration loading with DOCSEARCH_CONFIG_PATH env var override
 - Keyword matching with word boundaries (case-insensitive)
 - Denial response generation for single and multiple matches
+
+Tasks 6a, 6, and 12 completed with 15 passing tests total. Security and state management now work:
+- Session ID sanitization prevents path traversal attacks
+- Escape hatch allows retry with same params
+- State files use per-session isolation
+- Script is executable with proper shebang
 
 ## Codebase Analysis (2026-02-05)
 
@@ -122,20 +128,20 @@ All items below are required for a minimal viable hook:
   - Implement `build_deny_response()` for single/multiple database responses
   - Verify tests pass, commit
 
-- [ ] **Task 6a: Session ID Sanitization (Security)** *(NEW - MUST BE BEFORE Task 6)*
+- [x] **Task 6a: Session ID Sanitization (Security)** *(NEW - MUST BE BEFORE Task 6)*
   - Add tests for path traversal and special character handling in session_id
   - Implement `sanitize_session_id()` using regex to allow only alphanumeric, dash, underscore
   - Create `get_state_file()` stub that uses sanitized session_id
   - Verify tests pass, commit
 
-- [ ] **Task 6: Session State Management for Escape Hatch**
+- [x] **Task 6: Session State Management for Escape Hatch**
   - Add tests for state file creation, escape hatch retry, different query denial
   - Implement `get_state_dir()`, expand `get_state_file()`, `load_state()`, `save_state()`
   - Implement `params_match()` for exact query + set-based domain comparison
   - Update `main()` with escape hatch logic before keyword matching
   - Verify tests pass, commit
 
-- [ ] **Task 12: Make Script Executable and Add Shebang**
+- [x] **Task 12: Make Script Executable and Add Shebang**
   - Verify shebang line `#!/usr/bin/env python3` present
   - Run full test suite
   - Verify script executes with `./docsearch.py < /dev/null` (exit 0)

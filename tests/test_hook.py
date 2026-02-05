@@ -368,3 +368,204 @@ class TestStateManagement:
         )
         # Should deny (no valid state to trigger escape hatch)
         assert exit_code == 2
+
+
+class TestMultipleKeywordMatching:
+    """Tests for queries matching multiple databases."""
+
+    def test_multiple_keywords_match_all_databases(self):
+        """Query with multiple keywords should mention all matching databases."""
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "how to deploy gitlab on kubernetes"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json")},
+        )
+        assert exit_code == 2
+
+        output = json.loads(stdout)
+        context = output["hookSpecificOutput"]["additionalContext"]
+
+        # Both databases should be mentioned
+        assert "gitlab" in context.lower()
+        assert "kubernetes" in context.lower()
+        assert "IN PARALLEL" in context
+
+    def test_k8s_alias_matches_kubernetes(self):
+        """Alternative keywords like 'k8s' should match kubernetes database."""
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "k8s pod configuration"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json")},
+        )
+        assert exit_code == 2
+
+        output = json.loads(stdout)
+        assert "kubernetes" in output["hookSpecificOutput"]["additionalContext"].lower()
+
+    def test_database_order_preserved_in_output(self):
+        """Databases should appear in config file order in output."""
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "gitlab kubernetes deployment"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json")},
+        )
+        assert exit_code == 2
+
+        output = json.loads(stdout)
+        context = output["hookSpecificOutput"]["additionalContext"]
+
+        # GitLab appears first in config, so should be listed as item 1
+        gitlab_pos = context.find("GitLab")
+        kubernetes_pos = context.find("Kubernetes")
+        assert gitlab_pos != -1 and kubernetes_pos != -1, "Both databases should be mentioned"
+        assert gitlab_pos < kubernetes_pos, "GitLab should appear before Kubernetes (config order)"
+
+
+class TestStaleStateCleanup:
+    """Tests for stale state file cleanup."""
+
+    def test_expired_state_is_ignored(self, tmp_path):
+        """State older than 5 minutes should be ignored."""
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+
+        # Pre-create state file with old timestamp (6 minutes ago)
+        old_timestamp = int(time.time()) - 360  # 6 minutes ago
+        state_file = state_dir / "docsearch-state-test-session-old.json"
+        state_file.write_text(json.dumps({
+            "last_denied": {
+                "query": "how to configure gitlab ci",
+                "allowed_domains": [],
+                "blocked_domains": [],
+                "timestamp": old_timestamp,
+            }
+        }))
+
+        # Same query should be denied again (state expired)
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {
+                "query": "how to configure gitlab ci",
+                "allowed_domains": [],
+                "blocked_domains": [],
+            },
+            "session_id": "test-session-old",
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={
+                **os.environ,
+                "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json"),
+                "DOCSEARCH_STATE_DIR": str(state_dir),
+            },
+        )
+        assert exit_code == 2  # Should deny, not allow through
+
+    def test_recent_state_is_used(self, tmp_path):
+        """State less than 5 minutes old should be used."""
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+
+        # Pre-create state file with recent timestamp (2 minutes ago)
+        recent_timestamp = int(time.time()) - 120  # 2 minutes ago
+        state_file = state_dir / "docsearch-state-test-session-recent.json"
+        state_file.write_text(json.dumps({
+            "last_denied": {
+                "query": "how to configure gitlab ci",
+                "allowed_domains": [],
+                "blocked_domains": [],
+                "timestamp": recent_timestamp,
+            }
+        }))
+
+        # Same query should be allowed (escape hatch)
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {
+                "query": "how to configure gitlab ci",
+                "allowed_domains": [],
+                "blocked_domains": [],
+            },
+            "session_id": "test-session-recent",
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={
+                **os.environ,
+                "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json"),
+                "DOCSEARCH_STATE_DIR": str(state_dir),
+            },
+        )
+        assert exit_code == 0  # Should allow through
+
+
+class TestSessionStartCleanup:
+    """Tests for session start state cleanup."""
+
+    def test_stale_state_files_cleaned_on_hook_run(self, tmp_path):
+        """Stale state files from other sessions should be cleaned up."""
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+
+        # Create stale state files (older than 5 minutes)
+        old_timestamp = int(time.time()) - 400  # ~7 minutes ago
+        for i in range(3):
+            stale_file = state_dir / f"docsearch-state-stale-session-{i}.json"
+            stale_file.write_text(json.dumps({
+                "last_denied": {
+                    "query": "old query",
+                    "allowed_domains": [],
+                    "blocked_domains": [],
+                    "timestamp": old_timestamp,
+                }
+            }))
+            # Set file mtime to old time
+            os.utime(stale_file, (old_timestamp, old_timestamp))
+
+        # Create a recent state file that should NOT be cleaned
+        recent_timestamp = int(time.time()) - 60  # 1 minute ago
+        recent_file = state_dir / "docsearch-state-recent-session.json"
+        recent_file.write_text(json.dumps({
+            "last_denied": {
+                "query": "recent query",
+                "allowed_domains": [],
+                "blocked_domains": [],
+                "timestamp": recent_timestamp,
+            }
+        }))
+
+        # Run hook with a non-matching query (to trigger cleanup without matching)
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "make a sandwich"},
+            "session_id": "cleanup-test-session",
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={
+                **os.environ,
+                "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json"),
+                "DOCSEARCH_STATE_DIR": str(state_dir),
+            },
+        )
+        assert exit_code == 0  # Non-matching query
+
+        # Check that stale files were cleaned
+        remaining_files = list(state_dir.glob("docsearch-state-*.json"))
+        remaining_names = [f.name for f in remaining_files]
+
+        # Stale files should be gone
+        for i in range(3):
+            assert f"docsearch-state-stale-session-{i}.json" not in remaining_names
+
+        # Recent file should still exist
+        assert "docsearch-state-recent-session.json" in remaining_names
