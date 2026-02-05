@@ -55,13 +55,13 @@ Check state: Is this a retry? (same params as last call)
     {
       "keywords": ["gitlab", "gl", "gitlab-ci"],
       "path": "/Users/viktor/.leann/databases/gitlab",
-      "mcp_tool_name": "mcp__leann__search",
+      "mcp_tool_name": "leann-docs-search",
       "description": "GitLab documentation from docs.gitlab.com"
     },
     {
       "keywords": ["kubernetes", "k8s", "kubectl"],
       "path": "/Users/viktor/.leann/databases/kubernetes",
-      "mcp_tool_name": "mcp__leann__search",
+      "mcp_tool_name": "leann-docs-search",
       "description": "Kubernetes official documentation"
     }
   ]
@@ -77,7 +77,10 @@ Check state: Is this a retry? (same params as last call)
 
 - **`path`** (required): Absolute path to LEANN database directory
 
-- **`mcp_tool_name`** (required): Exact MCP tool name to suggest to Claude
+- **`mcp_tool_name`** (required): Exact MCP tool name to suggest to Claude (format: `<server-name>`, e.g., `leann-docs-search`)
+  - Must match your actual MCP server configuration
+  - The server name comes from your Claude Code MCP settings (e.g., in `.mcp.json`)
+  - The tool name depends on the MCP server implementation (for LEANN, typically `leann_search`)
 
 - **`description`** (required): Human-readable description passed to Claude in `additionalContext`
 
@@ -160,7 +163,7 @@ Shell-based PreToolUse hook (Python script executed as subprocess)
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
     "permissionDecisionReason": "Query matches 'gitlab' - using RAG database instead",
-    "additionalContext": "This query should use the LEANN MCP tool 'mcp__leann__search' to search the GitLab documentation RAG database at /Users/viktor/.leann/databases/gitlab instead of web search."
+    "additionalContext": "This query should use the LEANN MCP tool 'mcp__leann-docs-search__leann_search' to search the GitLab documentation RAG database at /Users/viktor/.leann/databases/gitlab instead of web search."
   }
 }
 ```
@@ -173,7 +176,7 @@ Shell-based PreToolUse hook (Python script executed as subprocess)
     "hookEventName": "PreToolUse",
     "permissionDecision": "deny",
     "permissionDecisionReason": "Query matches 'gitlab' and 'kubernetes' - using RAG databases instead",
-    "additionalContext": "This query matches multiple documentation databases. Please use these LEANN MCP tools IN PARALLEL:\n1. 'mcp__leann__search' for GitLab documentation at /Users/viktor/.leann/databases/gitlab\n2. 'mcp__leann__search' for Kubernetes official documentation at /Users/viktor/.leann/databases/kubernetes"
+    "additionalContext": "This query matches multiple documentation databases. Please use these LEANN MCP tools IN PARALLEL:\n1. 'mcp__leann-docs-search__leann_search' for GitLab documentation at /Users/viktor/.leann/databases/gitlab\n2. 'mcp__leann-docs-search__leann_search' for Kubernetes official documentation at /Users/viktor/.leann/databases/kubernetes"
   }
 }
 ```
@@ -291,7 +294,7 @@ User: "How do I configure GitLab CI runners?"
     ↓
 Hook detects "gitlab" → Denies WebSearch
     ↓
-Claude sees context → Calls mcp__leann__search with GitLab database
+Claude sees context → Calls mcp__leann-docs-search__leann_search with GitLab database
     ↓
 If MCP succeeds → User gets RAG-based answer
 If MCP fails → Claude retries WebSearch → Hook allows through → User gets web results

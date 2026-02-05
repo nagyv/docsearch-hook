@@ -271,13 +271,13 @@ Polish and documentation:
     {
       "keywords": ["gitlab", "gl", "gitlab-ci"],
       "path": "/Users/viktor/.leann/databases/gitlab",
-      "mcp_tool_name": "mcp__leann__search",
+      "mcp_tool_name": "leann-docs",
       "description": "GitLab documentation from docs.gitlab.com"
     },
     {
       "keywords": ["kubernetes", "k8s", "kubectl"],
       "path": "/Users/viktor/.leann/databases/kubernetes",
-      "mcp_tool_name": "mcp__leann__search",
+      "mcp_tool_name": "leann-docs",
       "description": "Kubernetes official documentation"
     }
   ]
@@ -551,13 +551,13 @@ Create `tests/fixtures/valid_config.json`:
     {
       "keywords": ["gitlab", "gl", "gitlab-ci"],
       "path": "/mock/path/gitlab",
-      "mcp_tool_name": "mcp__leann__search",
+      "mcp_tool_name": "leann-docs",
       "description": "GitLab documentation"
     },
     {
       "keywords": ["kubernetes", "k8s", "kubectl"],
       "path": "/mock/path/kubernetes",
-      "mcp_tool_name": "mcp__leann__search",
+      "mcp_tool_name": "leann-docs",
       "description": "Kubernetes documentation"
     }
   ]
@@ -1566,7 +1566,7 @@ class TestEdgeCases:
                 {
                     "keywords": ["c++", "c#", ".net"],
                     "path": "/mock/path/dotnet",
-                    "mcp_tool_name": "mcp__leann__search",
+                    "mcp_tool_name": "leann-docs",
                     "description": ".NET documentation"
                 }
             ]
@@ -1687,7 +1687,7 @@ Edit `~/.claude/hooks/docsearch-config.json`:
     {
       "keywords": ["gitlab", "gl", "gitlab-ci"],
       "path": "/path/to/.leann/databases/gitlab",
-      "mcp_tool_name": "mcp__leann__search",
+      "mcp_tool_name": "leann-docs",
       "description": "GitLab documentation from docs.gitlab.com"
     }
   ]
@@ -1854,7 +1854,7 @@ class TestConfigValidation:
             "databases": [
                 {
                     "path": "/mock/path/test",
-                    "mcp_tool_name": "mcp__leann__search",
+                    "mcp_tool_name": "leann-docs",
                     "description": "Test database"
                     # Missing: "keywords"
                 }
@@ -1881,7 +1881,7 @@ class TestConfigValidation:
             "databases": [
                 {
                     "keywords": ["test"],
-                    "mcp_tool_name": "mcp__leann__search",
+                    "mcp_tool_name": "leann-docs",
                     "description": "Test database"
                     # Missing: "path"
                 }
@@ -1909,7 +1909,7 @@ class TestConfigValidation:
                 {
                     "keywords": "gitlab",  # Should be ["gitlab"]
                     "path": "/mock/path/test",
-                    "mcp_tool_name": "mcp__leann__search",
+                    "mcp_tool_name": "leann-docs",
                     "description": "Test database"
                 }
             ]
@@ -1936,7 +1936,7 @@ class TestConfigValidation:
                 {
                     "keywords": [],  # Empty array
                     "path": "/mock/path/test",
-                    "mcp_tool_name": "mcp__leann__search",
+                    "mcp_tool_name": "leann-docs",
                     "description": "Test database"
                 }
             ]
@@ -1963,7 +1963,7 @@ class TestConfigValidation:
                 {
                     "keywords": ["test"],
                     "path": "relative/path/database",  # Should be absolute
-                    "mcp_tool_name": "mcp__leann__search",
+                    "mcp_tool_name": "leann-docs",
                     "description": "Test database"
                 }
             ]
@@ -2378,7 +2378,7 @@ Add to `tests/test_hook.py` in `TestConfigValidation` class:
                 {
                     "keywords": ["valid", 123, None, {"nested": "dict"}],
                     "path": "/mock/path/test",
-                    "mcp_tool_name": "mcp__leann__search",
+                    "mcp_tool_name": "leann-docs",
                     "description": "Test database"
                 }
             ]
