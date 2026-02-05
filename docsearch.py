@@ -52,7 +52,13 @@ def load_config() -> dict | None:
     try:
         with open(config_path) as f:
             return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    except FileNotFoundError:
+        return None  # Silent - expected during first-time setup
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON in config file {config_path}: {e}", file=sys.stderr)
+        return None
+    except OSError as e:
+        print(f"Error: Could not read config file {config_path}: {e}", file=sys.stderr)
         return None
 
 
@@ -107,6 +113,58 @@ def cleanup_stale_state_files() -> None:
                 pass
     except OSError:
         pass  # State directory doesn't exist or isn't accessible
+
+
+REQUIRED_DATABASE_FIELDS = ["keywords", "path", "mcp_tool_name", "description"]
+
+
+def validate_database_entry(db: dict, index: int) -> bool:
+    """Validate a database entry has all required fields and correct types.
+
+    Logs warnings to stderr for invalid entries. Returns True if valid.
+    """
+    # Check required fields
+    for field in REQUIRED_DATABASE_FIELDS:
+        if field not in db:
+            print(f"Warning: Database entry {index} missing required field '{field}'", file=sys.stderr)
+            return False
+
+    # Validate keywords is a list
+    keywords = db.get("keywords")
+    if not isinstance(keywords, list):
+        print(f"Warning: Database entry {index} 'keywords' must be a list, got {type(keywords).__name__}", file=sys.stderr)
+        return False
+
+    # Validate keywords is not empty
+    if len(keywords) == 0:
+        print(f"Warning: Database entry {index} 'keywords' is empty", file=sys.stderr)
+        return False
+
+    # Validate all keywords are strings
+    for i, keyword in enumerate(keywords):
+        if not isinstance(keyword, str):
+            print(f"Warning: Database entry {index} keyword {i} must be a string, got {type(keyword).__name__}", file=sys.stderr)
+            return False
+
+    # Warn about relative paths (but still valid)
+    path = db.get("path", "")
+    if path and not path.startswith("/"):
+        print(f"Warning: Database entry {index} 'path' should be absolute, got relative path '{path}'", file=sys.stderr)
+        # Don't return False - relative path is a warning, not an error
+
+    return True
+
+
+def validate_config(config: dict) -> list[dict]:
+    """Validate config and return list of valid database entries.
+
+    Invalid entries are filtered out and warnings logged to stderr.
+    """
+    valid_databases = []
+    for i, db in enumerate(config.get("databases", [])):
+        if validate_database_entry(db, i):
+            valid_databases.append(db)
+    return valid_databases
 
 
 def params_match(current: dict, previous: dict) -> bool:
@@ -199,6 +257,14 @@ def main() -> int:
     if config is None:
         return 0
 
+    # Validate config and filter invalid database entries
+    valid_databases = validate_config(config)
+    if not valid_databases:
+        return 0
+
+    # Create validated config for use
+    validated_config = {"databases": valid_databases}
+
     # Clean up stale state files from other sessions
     cleanup_stale_state_files()
 
@@ -220,7 +286,7 @@ def main() -> int:
         return 0
 
     # Find matching databases
-    matches = find_matching_databases(query, config)
+    matches = find_matching_databases(query, validated_config)
     if not matches:
         return 0
 

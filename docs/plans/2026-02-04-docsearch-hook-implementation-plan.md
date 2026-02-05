@@ -22,9 +22,9 @@
 | Task 6a | COMPLETED | Session ID Sanitization (Security) | P0 - Security | 4 |
 | Task 6 | COMPLETED | Session State Management for Escape Hatch | P0 - Core | 5 |
 | Task 12 | COMPLETED | Make Script Executable and Add Shebang | P0 - Core | 6 |
-| Task 5 | NOT STARTED | Multiple Keyword Matching (Verification Tests) | P1 - Feature | 7 |
-| Task 7 | NOT STARTED | State Cleanup (Stale State Expiry) | P1 - Enhancement | 8 |
-| Task 7a | NOT STARTED | Session Start State Cleanup | P1 - Enhancement | 9 |
+| Task 5 | COMPLETED | Multiple Keyword Matching (Verification Tests) | P1 - Feature | 7 |
+| Task 7 | COMPLETED | State Cleanup (Stale State Expiry) | P1 - Enhancement | 8 |
+| Task 7a | COMPLETED | Session Start State Cleanup | P1 - Enhancement | 9 |
 | Task 3a | NOT STARTED | Configuration Schema Validation | P1 - Quality | 10 |
 | Task 3b | NOT STARTED | Keywords Element Type Validation | P1 - Quality | 11 |
 | Task 8 | NOT STARTED | Error Logging to stderr | P1 - Enhancement | 12 |
@@ -47,6 +47,11 @@ Tasks 6a, 6, and 12 completed with 15 passing tests total. Security and state ma
 - Escape hatch allows retry with same params
 - State files use per-session isolation
 - Script is executable with proper shebang
+
+Tasks 5, 7, and 7a completed with 21 passing tests total. Enhanced features now work:
+- Multiple keyword matching verified with tests
+- State expiry after 5 minutes prevents stale escape hatches
+- Stale state file cleanup removes old session files
 
 ## Codebase Analysis (2026-02-05)
 

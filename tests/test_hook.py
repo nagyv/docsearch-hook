@@ -569,3 +569,162 @@ class TestSessionStartCleanup:
 
         # Recent file should still exist
         assert "docsearch-state-recent-session.json" in remaining_names
+
+
+class TestConfigValidation:
+    """Tests for configuration schema validation."""
+
+    def test_missing_keywords_logs_warning(self, tmp_path):
+        """Config entry missing 'keywords' should log warning and skip entry."""
+        config_file = tmp_path / "incomplete_config.json"
+        config_file.write_text(json.dumps({
+            "databases": [
+                {
+                    "path": "/mock/path/test",
+                    "mcp_tool_name": "leann-docs",
+                    "description": "Test database"
+                    # Missing: "keywords"
+                }
+            ]
+        }))
+
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "some query"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(config_file)},
+        )
+        # Should allow through (no valid databases)
+        assert exit_code == 0
+        # Should log warning about missing field
+        assert "keywords" in stderr.lower() or "missing" in stderr.lower()
+
+    def test_missing_path_logs_warning(self, tmp_path):
+        """Config entry missing 'path' should log warning and skip entry."""
+        config_file = tmp_path / "incomplete_config.json"
+        config_file.write_text(json.dumps({
+            "databases": [
+                {
+                    "keywords": ["test"],
+                    "mcp_tool_name": "leann-docs",
+                    "description": "Test database"
+                    # Missing: "path"
+                }
+            ]
+        }))
+
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "test query"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(config_file)},
+        )
+        # Should allow through (no valid databases after validation)
+        assert exit_code == 0
+        # Should log warning
+        assert "path" in stderr.lower() or "missing" in stderr.lower()
+
+    def test_keywords_not_array_logs_warning(self, tmp_path):
+        """Config entry with keywords as string (not array) should log warning."""
+        config_file = tmp_path / "bad_type_config.json"
+        config_file.write_text(json.dumps({
+            "databases": [
+                {
+                    "keywords": "gitlab",  # Should be ["gitlab"]
+                    "path": "/mock/path/test",
+                    "mcp_tool_name": "leann-docs",
+                    "description": "Test database"
+                }
+            ]
+        }))
+
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "gitlab ci"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(config_file)},
+        )
+        # Should allow through (invalid entry skipped)
+        assert exit_code == 0
+        # Should log warning about type
+        assert "keywords" in stderr.lower() or "array" in stderr.lower() or "list" in stderr.lower()
+
+    def test_empty_keywords_array_logs_warning(self, tmp_path):
+        """Config entry with empty keywords array should log warning."""
+        config_file = tmp_path / "empty_keywords_config.json"
+        config_file.write_text(json.dumps({
+            "databases": [
+                {
+                    "keywords": [],  # Empty array
+                    "path": "/mock/path/test",
+                    "mcp_tool_name": "leann-docs",
+                    "description": "Test database"
+                }
+            ]
+        }))
+
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "test query"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(config_file)},
+        )
+        # Should allow through (no valid databases)
+        assert exit_code == 0
+        # Should log warning about empty keywords
+        assert "keywords" in stderr.lower() or "empty" in stderr.lower()
+
+    def test_relative_path_logs_warning(self, tmp_path):
+        """Config entry with relative path should log warning but still work."""
+        config_file = tmp_path / "relative_path_config.json"
+        config_file.write_text(json.dumps({
+            "databases": [
+                {
+                    "keywords": ["test"],
+                    "path": "relative/path/database",  # Should be absolute
+                    "mcp_tool_name": "leann-docs",
+                    "description": "Test database"
+                }
+            ]
+        }))
+
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "test query"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(config_file)},
+        )
+        # Should still deny (relative path is a warning, not an error)
+        assert exit_code == 2
+        # Should log warning about relative path
+        assert "path" in stderr.lower() or "absolute" in stderr.lower() or "relative" in stderr.lower()
+
+
+class TestErrorLogging:
+    """Tests for error logging to stderr."""
+
+    def test_invalid_config_logs_to_stderr(self, tmp_path):
+        """Invalid config JSON should log error to stderr."""
+        config_file = tmp_path / "bad_config.json"
+        config_file.write_text("{invalid json")
+
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "test query"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(config_file)},
+        )
+        assert exit_code == 0  # Fail open
+        assert "error" in stderr.lower() or "json" in stderr.lower()
