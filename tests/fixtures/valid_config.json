@@ -1,0 +1,16 @@
+{
+  "databases": [
+    {
+      "keywords": ["gitlab", "gl", "gitlab-ci"],
+      "path": "/mock/path/gitlab",
+      "mcp_tool_name": "leann-docs",
+      "description": "GitLab documentation"
+    },
+    {
+      "keywords": ["kubernetes", "k8s", "kubectl"],
+      "path": "/mock/path/kubernetes",
+      "mcp_tool_name": "leann-docs",
+      "description": "Kubernetes documentation"
+    }
+  ]
+}
