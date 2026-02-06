@@ -894,6 +894,66 @@ class TestEdgeCases:
         assert hook_output["permissionDecision"] == "deny"
 
 
+class TestEscapeHatchInstructions:
+    """Tests for escape hatch instructions in deny responses."""
+
+    def test_single_match_includes_escape_hatch_instruction(self):
+        """Single match deny response should include escape hatch instruction."""
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "gitlab ci configuration"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json")},
+        )
+        assert exit_code == 2
+
+        output = json.loads(stdout)
+        context = output["hookSpecificOutput"]["additionalContext"]
+
+        # Verify escape hatch instruction is present
+        assert "Repeat the Web Search tool call with the exact same parameters" in context
+        assert "RAG search fails" in context
+
+    def test_multiple_match_includes_escape_hatch_instruction(self):
+        """Multiple match deny response should include escape hatch instruction."""
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "deploying gitlab on kubernetes"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json")},
+        )
+        assert exit_code == 2
+
+        output = json.loads(stdout)
+        context = output["hookSpecificOutput"]["additionalContext"]
+
+        # Verify escape hatch instruction is present
+        assert "Repeat the Web Search tool call with the exact same parameters" in context
+        assert "RAG search fails" in context
+
+    def test_single_match_does_not_include_path_in_context(self):
+        """Single match deny response should not include database path in context."""
+        hook_input = {
+            "tool_name": "WebSearch",
+            "tool_input": {"query": "gitlab ci configuration"},
+        }
+        exit_code, stdout, stderr = run_hook(
+            hook_input,
+            env={**os.environ, "DOCSEARCH_CONFIG_PATH": str(FIXTURES_DIR / "valid_config.json")},
+        )
+        assert exit_code == 2
+
+        output = json.loads(stdout)
+        context = output["hookSpecificOutput"]["additionalContext"]
+
+        # Verify path is not mentioned in context for single match
+        assert " at " not in context or "IN PARALLEL" in context  # "at" might be in multiple match format
+
+
 class TestSessionIsolation:
     """Tests for session isolation (Task 9b)."""
 

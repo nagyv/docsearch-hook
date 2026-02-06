@@ -242,7 +242,8 @@ def build_deny_response(matches: list[dict]) -> dict:
         reason = f"Query matches '{matched_keywords}' - using RAG database instead"
         context = (
             f"This query should use the LEANN MCP tool '{db['mcp_tool_name']}' "
-            f"to search the {db['description']} RAG database at {db['path']} instead of web search."
+            f"to search the {db['description']} RAG database instead of web search. "
+            "Repeat the Web Search tool call with the exact same parameters if the RAG search fails."
         )
     else:
         keyword_list = " and ".join(f"'{db['keywords'][0]}'" for db in matches)
@@ -250,6 +251,7 @@ def build_deny_response(matches: list[dict]) -> dict:
         lines = ["This query matches multiple documentation databases. Please use these LEANN MCP tools IN PARALLEL:"]
         for i, db in enumerate(matches, 1):
             lines.append(f"{i}. '{db['mcp_tool_name']}' for {db['description']} at {db['path']}")
+        lines.append("Repeat the Web Search tool call with the exact same parameters if the RAG search fails.")
         context = "\n".join(lines)
 
     return {
