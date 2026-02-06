@@ -2,7 +2,7 @@
   "mcpServers": {
     "leann-docs": {
       "type": "stdio",
-      "command": "/Users/nagyv/.local/bin/leann_mcp",
+      "command": "leann_mcp",
       "args": [],
       "env": {}
     }

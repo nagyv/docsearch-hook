@@ -39,7 +39,7 @@ A Claude Code PreToolUse hook that intercepts WebSearch tool calls and redirects
    ```json
    {
      "hooks": {
-       "PreToolUse": ["~/.claude/hooks/PreToolUse/docsearch.py"]
+       "PreToolUse": [{"matcher": "WebSearch", "hooks": [{"type": "command", "command": "~/.claude/hooks/PreToolUse/docsearch.py"}}]]
      }
    }
    ```
